@@ -1,0 +1,21 @@
+[project]
+name = "krr-teaching-material"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Juell Sprott", email = "juell.sprott@student.uva.nl" }
+]
+dependencies = [
+    "clingo>=5.7.1",
+    "ipykernel>=6.29.3",
+    "psutil>=5.9.8",
+    "matplotlib>=3.8.3",
+    "networkx>=3.2.1",
+]
+readme = "README.md"
+requires-python = ">= 3.10"
+
+[tool.rye]
+managed = true
+virtual = true
+dev-dependencies = []
