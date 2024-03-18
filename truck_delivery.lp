@@ -1,5 +1,5 @@
 % define max time steps
-#const max_time = 1.
+#const max_time = 40.
 
 % define nodes
 node(N) :- N = 1..6.
@@ -13,22 +13,24 @@ factory(1, 1, 3).
 delivery_point(1,4,2; 1,5,2).
 
 % define charging points (location)
-charging_point(2; 1).
+charging_point(2; 6).
 
-% define trucks truck(id, time, location, load, capacity, charge_level, charge_capacity)
-truck(1, 1, 1, 0, 1, 2, 10; 2, 1, 2, 1, 1, 2, 10).
+% define trucks: truck(id, time, location, load, capacity, charge_level, charge_capacity)
+truck(1, 1, 1, 0, 1, 2, 10; 2, 1, 2, 0, 1, 2, 10).
 
 % define initial spots for trucks
-truck_at(truck1,0).
-truck_at(truck2,1).
+truck_at(1,1).
+truck_at(2,2).
 
+% first, count total amount of trucks and delivery points for later
 num_trucks(N) :- N = #count{Id: truck_at(Id,_)}.
 num_delivery_points(N) :- N = #count{Id: delivery_point(_,Id,_)}.
 
 % generate all possible actions for all timesteps for each truck
-% Time, Truck, unload;
 1 { do(Time, Truck, move(1..6);Time, Truck, charge;Time, Truck, wait; Time, Truck, load; Time, Truck, unload)} 1 :- 
 Time = 1..max_time, Truck = 1..C, C = #count{Id: truck(Id, _, _, _, _, _, _)}.
+
+% below we define the actions that can be taken with their constraints
 
 % MOVE
 % move truck location at next timestep.
@@ -146,28 +148,66 @@ delivery_point(Time + 1, N, Required) :-
      Load < 1.
 
 % GOALS
-% goals to reach
-% deliveries_done(Time, false) :-
-%     delivery_point(Time, _, Required),
-%     Required > 0.
+% define goal: if all trucks are at charging station, then the goal is reached
 
+% first, define a helper predicate to check if a truck is not at a charging point
 trucks_done(Time, false) :-
-    truck(_, Time, Node, Load, _, _, _),
-    Load > 0,
-    not charging_point(Node).
+    truck(_, Time, N, _, _, _, _),
+    not charging_point(N).
 
+% then, define a predicate to check if there is a truck that still has load
+trucks_done(Time, false) :-
+    truck(_, Time, _, Load, _, _, _),
+    Load > 0.
+
+% if no truck is not at a charging point and no truck has load, then the first goal is reached
 trucks_done(Time, true) :-
-    action(Time),
+    truck(_, Time, _, _, _, _, _),
     not trucks_done(Time, false).
 
-% deliveries_done(Time, true) :-
-%     not deliveries_done(Time, false).
+% define goal: if all delivery points do not have any required packages, then the goal is reached
 
-% goal_reached(Time, false) :-
-% action(Time),
-% not goal_reached(Time, true)
+% first, define a helper predicate to check if there is a delivery point that still has required packages
+deliveries_done(Time, false) :-
+    delivery_point(Time, _, Required),
+    Required > 0.
 
-#show trucks_done/2.
-#show action/1.
+% if no delivery point has required packages, then the second goal is reached
+deliveries_done(Time, true) :-
+    truck(_, Time, _, _, _, _, _),
+    not deliveries_done(Time, false).
+
+% if both goals are reached, then the final goal is reached
+goal_reached(Time, true) :-
+    deliveries_done(Time, true),
+    trucks_done(Time, true).
+
+% define a predicate to check if the goal is not reached
+goal_reached(Time, false) :-
+    truck(_, Time, _, _, _, _, _),
+    not goal_reached(Time, true).
+
+% goal must be reached for model to be considered
+:- not goal_reached(_, true).
+
+% MAXIMIZE WAIT STEPS
+% the following lines serve as a way to maximize the amount of trucks that perform wait action,
+% by counting the amount of trucks that perform wait action for each timestep and maximizing the amount of times all trucks perform wait action.
+
+% for each timestep, count the amount of trucks that perform wait action
+wait_count(Time, N) :- action(Time),
+                        N = #count{wait, Truck: do(Time, Truck, wait)}.
+
+% maximize the amount of trucks that perform wait action
+% first, check if all trucks perform wait action for each timestep
+all_trucks_await(Time) :- action(Time),
+                        num_trucks(NumTrucks),
+                        wait_count(Time, Count),
+                        Count = NumTrucks.
+
+% then, maximize the amount of times all trucks perform wait action
+#maximize {Time: all_trucks_await(Time)}.
 
 
+#show do/3.
+#show truck_at/2.
